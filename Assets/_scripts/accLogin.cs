@@ -4,7 +4,7 @@ using TMPro;
 using System.Collections;
 using UnityEngine.Networking;
 using UnityEngine.UI;
-
+using System.Text.RegularExpressions;
 
 
 public class accLogin : MonoBehaviour
@@ -18,7 +18,9 @@ public class accLogin : MonoBehaviour
 
     private string loginEndPoint = "http://localhost:3000/login"; // Replace with your server URL
     private string createaccEndPoint = "http://localhost:3000/createacc"; // Replace with your server URL
-
+    
+    // define the pattern
+    private static readonly Regex passwordRegex = new Regex(@"^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)[A-Za-z\d]{6,25}$"); 
 
     public void OnLoginClick()
     {
@@ -40,14 +42,14 @@ public class accLogin : MonoBehaviour
         string username = usernameInput.text;
         string password = passwordInput.text;
 
-        if(username.Length < 4 || username.Length > 20){
+        if(username.Length < 3 || username.Length > 25){
             alert_text.text = "Username must be between 5 and 20 characters long.";
             loginButton.interactable = true;
             createaccButton.interactable = true;
             yield break;
         }
-        if(password.Length < 4 || password.Length > 20){
-            alert_text.text = "Password must be between 5 and 20 characters long.";
+         if(passwordRegex.IsMatch(password) == false){
+            alert_text.text = "Invalid password.";
             loginButton.interactable = true;
             createaccButton.interactable = true;
             yield break;
@@ -136,13 +138,13 @@ public class accLogin : MonoBehaviour
         string username = usernameInput.text;
         string password = passwordInput.text;
 
-        if(username.Length < 4 || username.Length > 20){
+        if(username.Length < 3 || username.Length > 25){
             alert_text.text = "Username must be between 5 and 20 characters long.";
             loginButton.interactable = true;
             createaccButton.interactable = true;
             yield break;
         }
-        if(password.Length < 4 || password.Length > 20){
+        if(passwordRegex.IsMatch(password) == false){
             alert_text.text = "Invalid password.";
             loginButton.interactable = true;
             createaccButton.interactable = true;
@@ -181,6 +183,7 @@ public class accLogin : MonoBehaviour
         // Handle response
         if (request.result == UnityWebRequest.Result.Success)
         {
+
             Debug.Log(request.downloadHandler.text);
             CreateResponseFromNodeServer createResponse = JsonUtility.FromJson<CreateResponseFromNodeServer>(request.downloadHandler.text);
 
@@ -200,12 +203,17 @@ public class accLogin : MonoBehaviour
                         createaccButton.interactable = true;
                         break;
                     case 2:
-                        alert_text.text = createResponse.message;
+                        alert_text.text = "Username already exists, please choose another one";
                         loginButton.interactable = true;
                         createaccButton.interactable = true;
                         break;
+                    case 3:
+                            alert_text.text = "Password is too weak, please choose a stronger one";
+                            loginButton.interactable = true;
+                            createaccButton.interactable = true;
+                            break;
                     default:
-                        alert_text.text = "Unknown error occurred";
+                        alert_text.text = "Unknown error occurred or Corrupted data";
                         loginButton.interactable = false;
                         createaccButton.interactable = false;
                         break;
