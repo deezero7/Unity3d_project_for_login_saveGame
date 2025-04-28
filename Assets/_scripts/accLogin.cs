@@ -16,8 +16,8 @@ public class accLogin : MonoBehaviour
     [SerializeField] private Button createaccButton;
 
 
-    private string loginEndPoint = "http://localhost:3000/login"; // Replace with your server URL
-    private string createaccEndPoint = "http://localhost:3000/createacc"; // Replace with your server URL
+    private string loginEndPoint = "http://localhost:3000/u3d/login"; // Replace with your server URL
+    private string createaccEndPoint = "http://localhost:3000/u3d/createacc"; // Replace with your server URL
     
     // define the pattern
     private static readonly Regex passwordRegex = new Regex(@"^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)[A-Za-z\d]{6,25}$"); 
@@ -84,11 +84,13 @@ public class accLogin : MonoBehaviour
             yield return null;
         }
 
+        LoginResponseFromNodeServer loginResponse = JsonUtility.FromJson<LoginResponseFromNodeServer>(request.downloadHandler.text);
+
         // Handle response
         if (request.result == UnityWebRequest.Result.Success)
         {
             Debug.Log(request.downloadHandler.text);
-            LoginResponseFromNodeServer loginResponse = JsonUtility.FromJson<LoginResponseFromNodeServer>(request.downloadHandler.text);
+            // LoginResponseFromNodeServer loginResponse = JsonUtility.FromJson<LoginResponseFromNodeServer>(request.downloadHandler.text);
 
             if(loginResponse.code == 0){
                 //alert_text.text = "username and password are required";
@@ -105,8 +107,23 @@ public class accLogin : MonoBehaviour
                         loginButton.interactable = true;
                         createaccButton.interactable = true;
                         break;
+                    case 3:
+                        alert_text.text = "Password is too weak, please choose a stronger one";
+                        loginButton.interactable = true;
+                        createaccButton.interactable = true;
+                        break;
+                    case 98:
+                        alert_text.text = "Account locked due to too many failed attempts. Try again later";
+                        loginButton.interactable = false;
+                        createaccButton.interactable = false;
+                        break;
+                    case 99:
+                        alert_text.text = "Too many login attempts. Please try again later";
+                        loginButton.interactable = false;
+                        createaccButton.interactable = false;
+                        break;
                     default:
-                        alert_text.text = "Unknown error occurred";
+                        alert_text.text = "Unknown error occurred or Corrupted data";
                         loginButton.interactable = false;
                         createaccButton.interactable = false;
                         break;
@@ -121,7 +138,7 @@ public class accLogin : MonoBehaviour
         }
         else
         {
-            alert_text.text = "User not found";
+            alert_text.text = loginResponse.message;
             loginButton.interactable = true;
             createaccButton.interactable = true;
             
@@ -208,10 +225,15 @@ public class accLogin : MonoBehaviour
                         createaccButton.interactable = true;
                         break;
                     case 3:
-                            alert_text.text = "Password is too weak, please choose a stronger one";
-                            loginButton.interactable = true;
-                            createaccButton.interactable = true;
-                            break;
+                        alert_text.text = "Password is too weak, please choose a stronger one";
+                        loginButton.interactable = true;
+                        createaccButton.interactable = true;
+                        break;
+                    case 99:
+                        alert_text.text = "Too many login attempts. Please try again later";
+                        loginButton.interactable = false;
+                        createaccButton.interactable = false;
+                        break;
                     default:
                         alert_text.text = "Unknown error occurred or Corrupted data";
                         loginButton.interactable = false;
