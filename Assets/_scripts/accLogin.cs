@@ -5,6 +5,9 @@ using System.Collections;
 using UnityEngine.Networking;
 using UnityEngine.UI;
 using System.Text.RegularExpressions;
+using System;
+using System.IO;
+using System.Collections.Generic;
 
 
 public class accLogin : MonoBehaviour
@@ -15,10 +18,18 @@ public class accLogin : MonoBehaviour
     [SerializeField] private Button loginButton;
     [SerializeField] private Button createaccButton;
 
+    private string loggedInUser; // Store the logged-in username here for profile picture upload or other uses
+    [SerializeField] private RawImage userProfilePicRawImage;
+    [SerializeField] private TextMeshProUGUI goldText;
+    [SerializeField] private TextMeshProUGUI gemsText;
+    [SerializeField] private TextMeshProUGUI levelText;
+    [SerializeField] private TextMeshProUGUI xpText;
+
 
     private string loginEndPoint = "http://localhost:3000/u3d/login"; // Replace with your server URL
     private string createaccEndPoint = "http://localhost:3000/u3d/createacc"; // Replace with your server URL
     
+    private string userProfilePicEndPoint = "http://localhost:3000/u3d/uploadProfilePictureWeb"; // Replace with your server URL
     // define the pattern
     private static readonly Regex passwordRegex = new Regex(@"^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)[A-Za-z\d]{6,25}$"); 
 
@@ -35,6 +46,62 @@ public class accLogin : MonoBehaviour
         createaccButton.interactable = false;
         
         StartCoroutine(CreateAcc());
+    }
+    public void OnUserProfilePicUploadClick()
+    {
+        alert_text.text = "Selecting profile picture...";
+
+        // Define allowed file types
+        string[] allowedFileTypes = new string[] { "image/*" };
+
+        NativeFilePicker.PickFile((path) =>
+        {
+            if (path == null)
+            {
+                alert_text.text = "File selection canceled.";
+                return;
+            }
+
+            byte[] imageData = File.ReadAllBytes(path);
+
+            if (imageData.Length > 200 * 1024)
+            {
+                alert_text.text = "Image too large. Must be under 200KB.";
+                return;
+            }
+
+            //string base64Image = Convert.ToBase64String(imageData);
+            StartCoroutine(UploadProfilePicture(loggedInUser, imageData));
+        }, allowedFileTypes);
+    }
+
+    private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
+    {
+        // Create multipart form
+        List<IMultipartFormSection> formData = new List<IMultipartFormSection>();
+        formData.Add(new MultipartFormDataSection("username", username));
+        formData.Add(new MultipartFormFileSection("image", imageBytes, "profile.png", "image/png"));
+
+        UnityWebRequest request = UnityWebRequest.Post(userProfilePicEndPoint, formData);
+
+        yield return request.SendWebRequest();
+
+        if (request.result == UnityWebRequest.Result.Success)
+        {
+            // ✅ Show the image in Unity UI immediately
+            Texture2D tex = new Texture2D(2, 2);
+            tex.LoadImage(imageBytes);
+            userProfilePicRawImage.texture = tex;
+            alert_text.text = "Profile picture uploaded successfully.";
+        }
+        else
+        {
+            alert_text.text = "Failed to upload profile picture: " + request.error;
+            Debug.LogError("Upload error: " + request.error);
+            Debug.LogError("Upload response: " + request.downloadHandler.text);
+        }
+
+        createaccButton.interactable = true;
     }
 
     private IEnumerator Login(){
@@ -93,6 +160,26 @@ public class accLogin : MonoBehaviour
             // LoginResponseFromNodeServer loginResponse = JsonUtility.FromJson<LoginResponseFromNodeServer>(request.downloadHandler.text);
 
             if(loginResponse.code == 0){
+                loggedInUser = loginResponse.userData.username;
+                var userData = loginResponse.userData;
+                 // Show game data
+                goldText.text = userData.gameData.gold.ToString();
+                gemsText.text = userData.gameData.gems.ToString();
+                levelText.text =  userData.gameData.level.ToString();
+                xpText.text = userData.gameData.experiencePoints.ToString();
+
+                // Show profile picture (already done)
+                if (!string.IsNullOrEmpty(userData.userProfilePicture)) {
+                    string base64 = userData.userProfilePicture;
+                    if (base64.StartsWith("data:image"))
+                        base64 = base64.Substring(base64.IndexOf(",") + 1);
+
+                    byte[] imageBytes = Convert.FromBase64String(base64);
+                    Texture2D tex = new Texture2D(2, 2);
+                    tex.LoadImage(imageBytes);
+                    userProfilePicRawImage.texture = tex;
+                }
+
                 //alert_text.text = "username and password are required";
                 loginButton.interactable = false;
                 createaccButton.interactable = false;
@@ -206,6 +293,13 @@ public class accLogin : MonoBehaviour
 
             // response from nodejs server compare to do the following..
             if(createResponse.code == 0){
+                GameAccount createUserData = new GameAccount();
+                createUserData.gameData.gold = 7;
+                createUserData.gameData.gems = 7;
+                createUserData.gameData.level = 7;
+                createUserData.gameData.experiencePoints = 7;
+                // upload this manual filled data to the server for test purposes
+                createResponse.userData = createUserData;
                 // loginButton.interactable = true;
                 // createaccButton.interactable = true;
                 // GameAccount returnedAccount = JsonUtility.FromJson<GameAccount>(request.downloadHandler.text);
@@ -255,4 +349,6 @@ public class accLogin : MonoBehaviour
         passwordInput.text = string.Empty;
         yield return null;
     }
+
+
 }

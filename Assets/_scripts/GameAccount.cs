@@ -7,4 +7,12 @@ public class GameAccount
     public bool isAdmin;
     public string username;
 
+    public string userProfilePicture;
+    public GameData gameData;
+
+    public GameAccount()
+    {
+        gameData = new GameData(); // Initialize here
+    }
+
 }
