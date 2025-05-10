@@ -9,6 +9,7 @@ using System;
 using System.IO;
 using System.Collections.Generic;
 using System.Text;
+using UnityEngine.SceneManagement;
 
 
 public class accLogin : MonoBehaviour
@@ -467,6 +468,7 @@ public class accLogin : MonoBehaviour
         PlayerPrefs.DeleteKey("authToken");
         Debug.Log("Logged out and token cleared.");
         // Redirect to login screen
+        SceneManager.LoadScene("MainMenu");
     }
 
     #region // save game data to server
@@ -547,6 +549,10 @@ public class accLogin : MonoBehaviour
             LoginResponseFromNodeServer response = JsonUtility.FromJson<LoginResponseFromNodeServer>(request.downloadHandler.text);
             goldText.text = data.gold.ToString();
             gemsText.text = data.gems.ToString();
+
+            // ✅ Clear inputs
+            goldInputField.text = "";
+            gemsInputField.text = "";
         }
         else
         {
@@ -557,3 +563,4 @@ public class accLogin : MonoBehaviour
     #endregion
 
 }
+
