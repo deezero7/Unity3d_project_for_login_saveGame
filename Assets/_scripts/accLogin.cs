@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using System;
 using System.IO;
 using System.Collections.Generic;
+using System.Text;
 
 
 public class accLogin : MonoBehaviour
@@ -25,13 +26,30 @@ public class accLogin : MonoBehaviour
     [SerializeField] private TextMeshProUGUI levelText;
     [SerializeField] private TextMeshProUGUI xpText;
 
-
-    private string loginEndPoint = "http://localhost:3000/u3d/login"; // Replace with your server URL
-    private string createaccEndPoint = "http://localhost:3000/u3d/createacc"; // Replace with your server URL
+    // #region // for local testing only
+    // private string loginEndPoint = "http://localhost:3000/u3d/login"; // Replace with your server URL
+    // private string createaccEndPoint = "http://localhost:3000/u3d/createacc"; // Replace with your server URL
     
-    private string userProfilePicEndPoint = "http://localhost:3000/u3d/uploadProfilePictureWeb"; // Replace with your server URL
+    // private string userProfilePicEndPoint = "http://localhost:3000/u3d/uploadProfilePictureWeb"; // Replace with your server URL
+    // #endregion
+
+    #region // for production only
+     private string loginEndPoint = "https://nodejs-server-for-unity3dgame-login-5vxc.onrender.com/u3d/login"; // Replace with your server URL
+    private string createaccEndPoint = "https://nodejs-server-for-unity3dgame-login-5vxc.onrender.com/u3d/createacc"; // Replace with your server URL
+    
+    private string userProfilePicEndPoint = "https://nodejs-server-for-unity3dgame-login-5vxc.onrender.com/u3d/uploadProfilePictureWeb"; // Replace with your server URL
+    private string autoLoginEndPoint = "https://nodejs-server-for-unity3dgame-login-5vxc.onrender.com/u3d/autoLogin"; // Replace with your server URL
+    #endregion
+
     // define the pattern
     private static readonly Regex passwordRegex = new Regex(@"^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)[A-Za-z\d]{6,25}$"); 
+    
+
+     private void Start() {
+        // Check if the user is already logged in
+        TryAutoLogin();
+    }
+
 
     public void OnLoginClick()
     {
@@ -47,6 +65,85 @@ public class accLogin : MonoBehaviour
         
         StartCoroutine(CreateAcc());
     }
+
+    // auto login using jwt token
+    /*Flow Recap
+        First login → server issues JWT (168h expiry) → client stores it via SecurePrefs.
+
+        App reopens → Unity reads the token → sends it to /autoLogin route.
+
+        Server checks if token is valid:
+
+        ✅ If valid: allows auto-login.
+
+        ❌ If expired/invalid: responds with 401/403 → client clears token → shows login screen.
+
+        New login replaces old token in SecurePrefs.
+
+        So you're right — no need to track expiry on the client side unless you want to skip a round-trip to the server to check validity first.
+        */
+    public void TryAutoLogin()
+    {
+        string token = SecurePrefs.GetEncryptedToken();
+        if (!string.IsNullOrEmpty(token))
+        {
+            StartCoroutine(PostAutoLogin(token));
+        }
+        else
+        {
+            Debug.Log("No token found. Showing login UI.");
+            // Show login screen or fallback
+        }
+    }
+
+    IEnumerator PostAutoLogin(string token)
+    {
+        UnityWebRequest request = new UnityWebRequest(autoLoginEndPoint, "POST");
+        request.uploadHandler = new UploadHandlerRaw(new byte[0]); // empty body
+        request.downloadHandler = new DownloadHandlerBuffer();
+        request.SetRequestHeader("Authorization", "Bearer " + token);
+        request.SetRequestHeader("Content-Type", "application/json");
+
+        yield return request.SendWebRequest();
+
+        if (request.result == UnityWebRequest.Result.Success)
+        {
+            Debug.Log("Auto-login success: " + request.downloadHandler.text);
+            // Proceed to game
+            LoginResponseFromNodeServer loginResponse = JsonUtility.FromJson<LoginResponseFromNodeServer>(request.downloadHandler.text);
+            loggedInUser = loginResponse.userData.username;
+            var userData = loginResponse.userData;
+            string adminText = loginResponse.userData.isAdmin ? " (Admin)" : "";
+            alert_text.text = "Auto-login success " + "Welcome back " + adminText + loginResponse.userData.username + "!";;
+            
+            // jwt token save to securePrefs for auto refresh of jwt token
+            SaveTokenAfterLogin(loginResponse.userData.token); // Store token
+            
+            // Show game data
+                goldText.text = userData.gameData.gold.ToString();
+                gemsText.text = userData.gameData.gems.ToString();
+                levelText.text =  userData.gameData.level.ToString();
+                xpText.text = userData.gameData.experiencePoints.ToString();
+
+                // Show profile picture (already done)
+                if (!string.IsNullOrEmpty(userData.userProfilePicture)) {
+                    string base64 = userData.userProfilePicture;
+                    if (base64.StartsWith("data:image"))
+                        base64 = base64.Substring(base64.IndexOf(",") + 1);
+
+                    byte[] imageBytes = Convert.FromBase64String(base64);
+                    Texture2D tex = new Texture2D(2, 2);
+                    tex.LoadImage(imageBytes);
+                    userProfilePicRawImage.texture = tex;
+                }
+        }
+        else
+        {
+            Debug.LogWarning("Auto-login failed: " + request.responseCode + " " + request.error);
+            // Handle expired token or show login
+        }
+    }
+
     public void OnUserProfilePicUploadClick()
     {
         alert_text.text = "Selecting profile picture...";
@@ -103,7 +200,7 @@ public class accLogin : MonoBehaviour
 
         createaccButton.interactable = true;
     }
-
+    
     private IEnumerator Login(){
 
         string username = usernameInput.text;
@@ -157,11 +254,16 @@ public class accLogin : MonoBehaviour
         if (request.result == UnityWebRequest.Result.Success)
         {
             Debug.Log(request.downloadHandler.text);
-            // LoginResponseFromNodeServer loginResponse = JsonUtility.FromJson<LoginResponseFromNodeServer>(request.downloadHandler.text);
+            loginResponse = JsonUtility.FromJson<LoginResponseFromNodeServer>(request.downloadHandler.text);
 
             if(loginResponse.code == 0){
                 loggedInUser = loginResponse.userData.username;
                 var userData = loginResponse.userData;
+
+                // jwt token save to securePrefs
+                SaveTokenAfterLogin(loginResponse.userData.token); // Store token
+                
+
                  // Show game data
                 goldText.text = userData.gameData.gold.ToString();
                 gemsText.text = userData.gameData.gems.ToString();
@@ -225,7 +327,8 @@ public class accLogin : MonoBehaviour
         }
         else
         {
-            alert_text.text = loginResponse.message;
+            alert_text.text = "Error connection to server.";
+            Debug.LogError($"Request failed! Error: {request.error}");
             loginButton.interactable = true;
             createaccButton.interactable = true;
             
@@ -350,5 +453,107 @@ public class accLogin : MonoBehaviour
         yield return null;
     }
 
+    public void SaveTokenAfterLogin(string jwtToken)
+    {
+        if (!string.IsNullOrEmpty(jwtToken)) {
+            SecurePrefs.SetEncryptedToken(jwtToken);
+        }
+    }
+
+    // This method is called when the user clicks the logout button
+    // It clears the token 
+    public void Logout()
+    {
+        PlayerPrefs.DeleteKey("authToken");
+        Debug.Log("Logged out and token cleared.");
+        // Redirect to login screen
+    }
+
+    #region // save game data to server
+    // save data to server
+    public TMP_InputField goldInputField;
+    public TMP_InputField gemsInputField;
+    private const string SaveGameDataUrl = "https://nodejs-server-for-unity3dgame-login-5vxc.onrender.com/u3d/saveGameData"; // Replace with your real endpoint
+
+    
+    public void OnSaveButtonClick()
+    {
+        // Check if the user is logged in
+        if (string.IsNullOrEmpty(loggedInUser))
+        {
+            Debug.LogWarning("User not logged in. Please log in first.");
+            return;
+        }
+        // Check if the token is valid
+        string token = SecurePrefs.GetEncryptedToken();
+        if (string.IsNullOrEmpty(token))
+        {
+            Debug.LogWarning("No valid auth token found. User may not be logged in.");
+            return;
+        }
+
+        // Trim whitespace before parsing
+        goldInputField.text = goldInputField.text.Trim();
+        gemsInputField.text = gemsInputField.text.Trim();
+
+        if (int.TryParse(goldInputField.text, out int gold) && int.TryParse(gemsInputField.text, out int gems))
+        {
+            if (gold > 100000 || gems > 100000)
+            {
+                Debug.LogWarning("Gold or Gems cannot exceed 100,000.");
+                return;
+            }
+
+            GameData data = new GameData
+            {
+                gold = gold,
+                gems = gems
+            };
+
+            SaveGameDataToServer(loggedInUser, data); // loggedInUser is the username
+        }
+        else
+            {
+                Debug.LogWarning("Please enter valid numbers for gold and gems.");
+            }
+    }
+
+    private void SaveGameDataToServer(string username, GameData data)
+    {
+        GameAccount request = new GameAccount
+        {
+            username = username,
+            gameData = data
+        };
+
+        string json = JsonUtility.ToJson(request);
+        StartCoroutine(SendPutRequest(json, data));
+    }
+
+    private IEnumerator SendPutRequest(string json, GameData data)
+    {
+        UnityWebRequest request = new UnityWebRequest(SaveGameDataUrl, "PUT");
+        byte[] bodyRaw = Encoding.UTF8.GetBytes(json);
+        request.uploadHandler = new UploadHandlerRaw(bodyRaw);
+        request.downloadHandler = new DownloadHandlerBuffer();
+        request.SetRequestHeader("Content-Type", "application/json");
+
+        yield return request.SendWebRequest();
+
+        if (request.result == UnityWebRequest.Result.Success)
+        {
+            Debug.Log("Game data saved: " + request.downloadHandler.text);
+            // Parse the server response to get updated values
+            LoginResponseFromNodeServer response = JsonUtility.FromJson<LoginResponseFromNodeServer>(request.downloadHandler.text);
+            goldText.text = data.gold.ToString();
+            gemsText.text = data.gems.ToString();
+        }
+        else
+        {
+            Debug.LogError("Error saving game data: " + request.error);
+        }
+    }
+
+    #endregion
 
 }

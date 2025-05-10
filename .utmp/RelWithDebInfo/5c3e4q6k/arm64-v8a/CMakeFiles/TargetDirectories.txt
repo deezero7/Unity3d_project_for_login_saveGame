@@ -1,0 +1,8 @@
+D:/Unity3d_Projects/Player_data_save_custom_nodejs_server/.utmp/RelWithDebInfo/5c3e4q6k/arm64-v8a/CMakeFiles/edit_cache.dir
+D:/Unity3d_Projects/Player_data_save_custom_nodejs_server/.utmp/RelWithDebInfo/5c3e4q6k/arm64-v8a/CMakeFiles/rebuild_cache.dir
+D:/Unity3d_Projects/Player_data_save_custom_nodejs_server/.utmp/RelWithDebInfo/5c3e4q6k/arm64-v8a/GameActivity/CMakeFiles/game.dir
+D:/Unity3d_Projects/Player_data_save_custom_nodejs_server/.utmp/RelWithDebInfo/5c3e4q6k/arm64-v8a/GameActivity/CMakeFiles/edit_cache.dir
+D:/Unity3d_Projects/Player_data_save_custom_nodejs_server/.utmp/RelWithDebInfo/5c3e4q6k/arm64-v8a/GameActivity/CMakeFiles/rebuild_cache.dir
+D:/Unity3d_Projects/Player_data_save_custom_nodejs_server/.utmp/RelWithDebInfo/5c3e4q6k/arm64-v8a/FramePacing/CMakeFiles/swappywrapper.dir
+D:/Unity3d_Projects/Player_data_save_custom_nodejs_server/.utmp/RelWithDebInfo/5c3e4q6k/arm64-v8a/FramePacing/CMakeFiles/edit_cache.dir
+D:/Unity3d_Projects/Player_data_save_custom_nodejs_server/.utmp/RelWithDebInfo/5c3e4q6k/arm64-v8a/FramePacing/CMakeFiles/rebuild_cache.dir

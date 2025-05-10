@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: eae21849ee49d6546bc64b993f7d7328
+timeCreated: 1565092157
+licenseType: Store
+NativeFormatImporter:
+  mainObjectFileID: 100100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 151966
+  packageName: Simple GDPR Consent
+  packageVersion: 1.1.3
+  assetPath: Assets/Plugins/SimpleGDPRConsent/Prefabs/HorizontalLine.prefab
+  uploadId: 617044

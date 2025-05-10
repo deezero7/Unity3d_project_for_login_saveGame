@@ -9,6 +9,7 @@ public class GameAccount
 
     public string userProfilePicture;
     public GameData gameData;
+    public string token;
 
     public GameAccount()
     {
