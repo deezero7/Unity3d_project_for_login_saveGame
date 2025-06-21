@@ -27,26 +27,36 @@ public class accLogin : MonoBehaviour
     [SerializeField] private TextMeshProUGUI levelText;
     [SerializeField] private TextMeshProUGUI xpText;
 
+    private AuthTokenManager tokenManager;
+
+
     // #region // for local testing only
     // private string loginEndPoint = "http://localhost:3000/u3d/login"; // Replace with your server URL
     // private string createaccEndPoint = "http://localhost:3000/u3d/createacc"; // Replace with your server URL
-    
+
     // private string userProfilePicEndPoint = "http://localhost:3000/u3d/uploadProfilePictureWeb"; // Replace with your server URL
     // #endregion
 
     #region // for production only
-     private string loginEndPoint = "https://nodejs-server-for-unity3dgame-login-5vxc.onrender.com/u3d/login"; // Replace with your server URL
+    private string loginEndPoint = "https://nodejs-server-for-unity3dgame-login-5vxc.onrender.com/u3d/login"; // Replace with your server URL
     private string createaccEndPoint = "https://nodejs-server-for-unity3dgame-login-5vxc.onrender.com/u3d/createacc"; // Replace with your server URL
-    
+
     private string userProfilePicEndPoint = "https://nodejs-server-for-unity3dgame-login-5vxc.onrender.com/u3d/uploadProfilePictureWeb"; // Replace with your server URL
     private string autoLoginEndPoint = "https://nodejs-server-for-unity3dgame-login-5vxc.onrender.com/u3d/autoLogin"; // Replace with your server URL
     #endregion
 
     // define the pattern
-    private static readonly Regex passwordRegex = new Regex(@"^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)[A-Za-z\d]{6,25}$"); 
-    
+    private static readonly Regex passwordRegex = new Regex(@"^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,25}$");
 
-     private void Start() {
+
+    private void Start()
+    {
+        tokenManager = UnityEngine.Object.FindFirstObjectByType<AuthTokenManager>();
+        if (tokenManager == null)
+        {
+            Debug.LogError("AuthTokenManager not found in the scene. Please add it to the scene.");
+            return;
+        }
         // Check if the user is already logged in
         TryAutoLogin();
     }
@@ -59,11 +69,11 @@ public class accLogin : MonoBehaviour
 
         StartCoroutine(Login());
     }
-     public void OnCreateAccClick()
+    public void OnCreateAccClick()
     {
         alert_text.text = "Creating account ";
         createaccButton.interactable = false;
-        
+
         StartCoroutine(CreateAcc());
     }
 
@@ -85,7 +95,7 @@ public class accLogin : MonoBehaviour
         */
     public void TryAutoLogin()
     {
-        string token = SecurePrefs.GetEncryptedToken();
+        string token = tokenManager.LoadDecryptedToken();
         if (!string.IsNullOrEmpty(token))
         {
             StartCoroutine(PostAutoLogin(token));
@@ -93,14 +103,13 @@ public class accLogin : MonoBehaviour
         else
         {
             Debug.Log("No token found. Showing login UI.");
-            // Show login screen or fallback
         }
     }
 
     IEnumerator PostAutoLogin(string token)
     {
         UnityWebRequest request = new UnityWebRequest(autoLoginEndPoint, "POST");
-        request.uploadHandler = new UploadHandlerRaw(new byte[0]); // empty body
+        request.uploadHandler = new UploadHandlerRaw(new byte[0]);
         request.downloadHandler = new DownloadHandlerBuffer();
         request.SetRequestHeader("Authorization", "Bearer " + token);
         request.SetRequestHeader("Content-Type", "application/json");
@@ -110,38 +119,57 @@ public class accLogin : MonoBehaviour
         if (request.result == UnityWebRequest.Result.Success)
         {
             Debug.Log("Auto-login success: " + request.downloadHandler.text);
-            // Proceed to game
-            LoginResponseFromNodeServer loginResponse = JsonUtility.FromJson<LoginResponseFromNodeServer>(request.downloadHandler.text);
+            string responseText = request.downloadHandler.text;
+
+            // Extract newToken manually
+            string newToken = null;
+            try
+            {
+                int tokenIndex = responseText.IndexOf("\"newToken\":\"") + 12;
+                int endIndex = responseText.IndexOf("\"", tokenIndex);
+                newToken = responseText.Substring(tokenIndex, endIndex - tokenIndex);
+                Debug.Log("Parsed newToken: " + newToken);
+            }
+            catch
+            {
+                Debug.LogWarning("Failed to extract newToken from response.");
+            }
+
+            LoginResponseFromNodeServer loginResponse = JsonUtility.FromJson<LoginResponseFromNodeServer>(responseText);
             loggedInUser = loginResponse.userData.username;
             var userData = loginResponse.userData;
             string adminText = loginResponse.userData.isAdmin ? " (Admin)" : "";
-            alert_text.text = "Auto-login success " + "Welcome back " + adminText + loginResponse.userData.username + "!";;
-            
-            // jwt token save to securePrefs for auto refresh of jwt token
-            SaveTokenAfterLogin(loginResponse.userData.token); // Store token
-            
-            // Show game data
-                goldText.text = userData.gameData.gold.ToString();
-                gemsText.text = userData.gameData.gems.ToString();
-                levelText.text =  userData.gameData.level.ToString();
-                xpText.text = userData.gameData.experiencePoints.ToString();
+            alert_text.text = "Auto-login success " + "Welcome back " + adminText + loginResponse.userData.username + "!";
 
-                // Show profile picture (already done)
-                if (!string.IsNullOrEmpty(userData.userProfilePicture)) {
-                    string base64 = userData.userProfilePicture;
-                    if (base64.StartsWith("data:image"))
-                        base64 = base64.Substring(base64.IndexOf(",") + 1);
+            if (!string.IsNullOrEmpty(newToken))
+            {
+                tokenManager.SaveEncryptedToken(newToken);
+            }
+            else
+            {
+                Debug.LogWarning("newToken was null, not saved.");
+            }
 
-                    byte[] imageBytes = Convert.FromBase64String(base64);
-                    Texture2D tex = new Texture2D(2, 2);
-                    tex.LoadImage(imageBytes);
-                    userProfilePicRawImage.texture = tex;
-                }
+            goldText.text = userData.gameData.gold.ToString();
+            gemsText.text = userData.gameData.gems.ToString();
+            levelText.text = userData.gameData.level.ToString();
+            xpText.text = userData.gameData.experiencePoints.ToString();
+
+            if (!string.IsNullOrEmpty(userData.userProfilePicture))
+            {
+                string base64 = userData.userProfilePicture;
+                if (base64.StartsWith("data:image"))
+                    base64 = base64.Substring(base64.IndexOf(",") + 1);
+
+                byte[] imageBytes = Convert.FromBase64String(base64);
+                Texture2D tex = new Texture2D(2, 2);
+                tex.LoadImage(imageBytes);
+                userProfilePicRawImage.texture = tex;
+            }
         }
         else
         {
             Debug.LogWarning("Auto-login failed: " + request.responseCode + " " + request.error);
-            // Handle expired token or show login
         }
     }
 
@@ -173,54 +201,66 @@ public class accLogin : MonoBehaviour
         }, allowedFileTypes);
     }
 
-    private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
+private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
+{
+    string token = tokenManager.LoadDecryptedToken();
+
+
+    if (string.IsNullOrEmpty(token))
     {
-        // Create multipart form
-        List<IMultipartFormSection> formData = new List<IMultipartFormSection>();
-        formData.Add(new MultipartFormDataSection("username", username));
-        formData.Add(new MultipartFormFileSection("image", imageBytes, "profile.png", "image/png"));
-
-        UnityWebRequest request = UnityWebRequest.Post(userProfilePicEndPoint, formData);
-
-        yield return request.SendWebRequest();
-
-        if (request.result == UnityWebRequest.Result.Success)
-        {
-            // ✅ Show the image in Unity UI immediately
-            Texture2D tex = new Texture2D(2, 2);
-            tex.LoadImage(imageBytes);
-            userProfilePicRawImage.texture = tex;
-            alert_text.text = "Profile picture uploaded successfully.";
-        }
-        else
-        {
-            alert_text.text = "Failed to upload profile picture: " + request.error;
-            Debug.LogError("Upload error: " + request.error);
-            Debug.LogError("Upload response: " + request.downloadHandler.text);
-        }
-
-        createaccButton.interactable = true;
+        alert_text.text = "No token found. Please log in again.";
+        yield break;
     }
-    
-    private IEnumerator Login(){
+
+    // Use WWWForm so Unity properly sets multipart boundary
+    WWWForm form = new WWWForm();
+    form.AddBinaryData("image", imageBytes, "profile.png", "image/png");
+
+    UnityWebRequest request = UnityWebRequest.Post(userProfilePicEndPoint, form);
+    request.SetRequestHeader("Authorization", "Bearer " + token);  // ✅ send token in header
+
+    Debug.Log("Uploading profile picture with token...");
+    yield return request.SendWebRequest();
+
+    if (request.result == UnityWebRequest.Result.Success || request.responseCode == 200)
+    {
+        Texture2D tex = new Texture2D(2, 2);
+        tex.LoadImage(imageBytes);
+        userProfilePicRawImage.texture = tex;
+        alert_text.text = "Profile picture uploaded successfully.";
+    }
+    else
+    {
+        alert_text.text = $"Failed to upload image: {request.error}";
+        Debug.LogError("Upload failed: " + request.downloadHandler.text);
+    }
+
+    createaccButton.interactable = true;
+}
+
+
+    private IEnumerator Login()
+    {
 
         string username = usernameInput.text;
         string password = passwordInput.text;
 
-        if(username.Length < 3 || username.Length > 25){
+        if (username.Length < 3 || username.Length > 25)
+        {
             alert_text.text = "Username must be between 5 and 20 characters long.";
             loginButton.interactable = true;
             createaccButton.interactable = true;
             yield break;
         }
-         if(passwordRegex.IsMatch(password) == false){
+        if (passwordRegex.IsMatch(password) == false)
+        {
             alert_text.text = "Invalid password.";
             loginButton.interactable = true;
             createaccButton.interactable = true;
             yield break;
         }
 
-        
+
         string fullURL = $"{loginEndPoint}?username={UnityWebRequest.EscapeURL(username)}&password={UnityWebRequest.EscapeURL(password)}";
         // Debug: Print the full URL
         // Debug.Log($"Sending request to: {fullURL}");
@@ -257,22 +297,24 @@ public class accLogin : MonoBehaviour
             Debug.Log(request.downloadHandler.text);
             loginResponse = JsonUtility.FromJson<LoginResponseFromNodeServer>(request.downloadHandler.text);
 
-            if(loginResponse.code == 0){
+            if (loginResponse.code == 0)
+            {
                 loggedInUser = loginResponse.userData.username;
                 var userData = loginResponse.userData;
 
                 // jwt token save to securePrefs
                 SaveTokenAfterLogin(loginResponse.userData.token); // Store token
-                
 
-                 // Show game data
+
+                // Show game data
                 goldText.text = userData.gameData.gold.ToString();
                 gemsText.text = userData.gameData.gems.ToString();
-                levelText.text =  userData.gameData.level.ToString();
+                levelText.text = userData.gameData.level.ToString();
                 xpText.text = userData.gameData.experiencePoints.ToString();
 
                 // Show profile picture (already done)
-                if (!string.IsNullOrEmpty(userData.userProfilePicture)) {
+                if (!string.IsNullOrEmpty(userData.userProfilePicture))
+                {
                     string base64 = userData.userProfilePicture;
                     if (base64.StartsWith("data:image"))
                         base64 = base64.Substring(base64.IndexOf(",") + 1);
@@ -288,10 +330,12 @@ public class accLogin : MonoBehaviour
                 createaccButton.interactable = false;
                 string adminText = loginResponse.userData.isAdmin ? " (Admin)" : "";
                 alert_text.text = "Welcome back " + adminText + loginResponse.userData.username + "!";
-                
+
             }
-            else{
-                switch(loginResponse.code){
+            else
+            {
+                switch (loginResponse.code)
+                {
                     case 1:
                         alert_text.text = "Invalid Credentials";
                         loginButton.interactable = true;
@@ -318,13 +362,13 @@ public class accLogin : MonoBehaviour
                         createaccButton.interactable = false;
                         break;
                 }
-                
+
                 Debug.LogError($"Login failed! Error: {request.error}");
                 // Handle login failure (e.g., show error message)
             }
-            
-            
-            
+
+
+
         }
         else
         {
@@ -332,7 +376,7 @@ public class accLogin : MonoBehaviour
             Debug.LogError($"Request failed! Error: {request.error}");
             loginButton.interactable = true;
             createaccButton.interactable = true;
-            
+
         }
 
         // Clear the input fields after login attempt
@@ -340,26 +384,29 @@ public class accLogin : MonoBehaviour
         passwordInput.text = string.Empty;
         yield return null;
     }
-    
-    private IEnumerator CreateAcc(){
+
+    private IEnumerator CreateAcc()
+    {
 
         string username = usernameInput.text;
         string password = passwordInput.text;
 
-        if(username.Length < 3 || username.Length > 25){
+        if (username.Length < 3 || username.Length > 25)
+        {
             alert_text.text = "Username must be between 5 and 20 characters long.";
             loginButton.interactable = true;
             createaccButton.interactable = true;
             yield break;
         }
-        if(passwordRegex.IsMatch(password) == false){
-            alert_text.text = "Invalid password.";
+        if (passwordRegex.IsMatch(password) == false)
+        {
+            alert_text.text = "Invalid password format";
             loginButton.interactable = true;
             createaccButton.interactable = true;
             yield break;
         }
 
-        
+
         string fullURL = $"{createaccEndPoint}?username={UnityWebRequest.EscapeURL(username)}&password={UnityWebRequest.EscapeURL(password)}";
         // Debug: Print the full URL
         Debug.Log($"Sending request to: {fullURL}");
@@ -396,7 +443,8 @@ public class accLogin : MonoBehaviour
             CreateResponseFromNodeServer createResponse = JsonUtility.FromJson<CreateResponseFromNodeServer>(request.downloadHandler.text);
 
             // response from nodejs server compare to do the following..
-            if(createResponse.code == 0){
+            if (createResponse.code == 0)
+            {
                 GameAccount createUserData = new GameAccount();
                 createUserData.gameData.gold = 7;
                 createUserData.gameData.gems = 7;
@@ -408,10 +456,12 @@ public class accLogin : MonoBehaviour
                 // createaccButton.interactable = true;
                 // GameAccount returnedAccount = JsonUtility.FromJson<GameAccount>(request.downloadHandler.text);
                 alert_text.text = "Account created! Logg in...";
-                
+
             }
-            else{
-                switch(createResponse.code){
+            else
+            {
+                switch (createResponse.code)
+                {
                     case 1:
                         alert_text.text = "username and password are required";
                         loginButton.interactable = true;
@@ -438,8 +488,8 @@ public class accLogin : MonoBehaviour
                         createaccButton.interactable = false;
                         break;
                 }
-                
-            }        
+
+            }
         }
         else
         {
@@ -456,8 +506,9 @@ public class accLogin : MonoBehaviour
 
     public void SaveTokenAfterLogin(string jwtToken)
     {
-        if (!string.IsNullOrEmpty(jwtToken)) {
-            SecurePrefs.SetEncryptedToken(jwtToken);
+        if (!string.IsNullOrEmpty(jwtToken))
+        {
+            tokenManager.SaveEncryptedToken(jwtToken);
         }
     }
 
@@ -477,7 +528,7 @@ public class accLogin : MonoBehaviour
     public TMP_InputField gemsInputField;
     private const string SaveGameDataUrl = "https://nodejs-server-for-unity3dgame-login-5vxc.onrender.com/u3d/saveGameData"; // Replace with your real endpoint
 
-    
+
     public void OnSaveButtonClick()
     {
         // Check if the user is logged in
@@ -487,7 +538,7 @@ public class accLogin : MonoBehaviour
             return;
         }
         // Check if the token is valid
-        string token = SecurePrefs.GetEncryptedToken();
+        string token = tokenManager.LoadDecryptedToken();
         if (string.IsNullOrEmpty(token))
         {
             Debug.LogWarning("No valid auth token found. User may not be logged in.");
@@ -515,9 +566,9 @@ public class accLogin : MonoBehaviour
             SaveGameDataToServer(loggedInUser, data); // loggedInUser is the username
         }
         else
-            {
-                Debug.LogWarning("Please enter valid numbers for gold and gems.");
-            }
+        {
+            Debug.LogWarning("Please enter valid numbers for gold and gems.");
+        }
     }
 
     private void SaveGameDataToServer(string username, GameData data)

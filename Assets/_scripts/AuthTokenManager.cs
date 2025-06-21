@@ -1,23 +1,25 @@
-using UnityEngine;
-using UnityEngine.Networking;
-using System.Collections;
+using System;
 using System.Security.Cryptography;
 using System.Text;
 using System.IO;
+using UnityEngine;
+using UnityEngine.Networking;
+using System.Collections;
 
 public class AuthTokenManager : MonoBehaviour
 {
-    private string validateUrl = "https://nodejs-server-for-unity3dgame-login-5vxc.onrender.com/u3d/validateToken"; // Replace with your backend URL
-    private static readonly string key = "mine16byteAESkey"; // Must be 16 chars
+    private const string key = "mine16CharKey123"; // 16-char AES key
+    private const string prefsKey = "authToken";   // PlayerPrefs key
+    private const string validateUrl = "https://nodejs-server-for-unity3dgame-login-5vxc.onrender.com/u3d/validateToken";
 
     [System.Serializable]
-    public class TokenPayload
+    private class TokenPayload
     {
         public string token;
     }
 
     [System.Serializable]
-    public class ServerResponse
+    private class ServerResponse
     {
         public int code;
         public string message;
@@ -26,9 +28,39 @@ public class AuthTokenManager : MonoBehaviour
 
     void Start()
     {
-        ValidateSavedToken();
+        ValidateSavedToken(); // Optional auto-validation on start
     }
 
+    // Save token to PlayerPrefs (encrypted)
+    public void SaveEncryptedToken(string token)
+    {
+        if (string.IsNullOrEmpty(token))
+        {
+            Debug.LogWarning("Attempted to save empty token");
+            return;
+        }
+
+        string encrypted = Encrypt(token);
+        PlayerPrefs.SetString(prefsKey, encrypted);
+        PlayerPrefs.Save();
+    }
+
+    // Load token from PlayerPrefs (decrypted)
+    public string LoadDecryptedToken()
+    {
+        if (!PlayerPrefs.HasKey(prefsKey)) return null;
+        string encrypted = PlayerPrefs.GetString(prefsKey);
+        return string.IsNullOrEmpty(encrypted) ? null : Decrypt(encrypted);
+    }
+
+    // Delete stored token
+    public void DeleteToken()
+    {
+        PlayerPrefs.DeleteKey(prefsKey);
+        PlayerPrefs.Save();
+    }
+
+    // Optional: Validate token with backend
     public void ValidateSavedToken()
     {
         string token = LoadDecryptedToken();
@@ -38,34 +70,15 @@ public class AuthTokenManager : MonoBehaviour
         }
         else
         {
-            Debug.Log("No saved token. Show login UI.");
+            Debug.Log("No token found. Showing login screen.");
         }
-    }
-
-    public void SaveEncryptedToken(string token)
-    {
-        string encrypted = Encrypt(token);
-        PlayerPrefs.SetString("jwtToken", encrypted);
-        PlayerPrefs.Save();
-    }
-
-    public string LoadDecryptedToken()
-    {
-        if (!PlayerPrefs.HasKey("jwtToken")) return null;
-        string encrypted = PlayerPrefs.GetString("jwtToken");
-        return Decrypt(encrypted);
-    }
-
-    public void DeleteToken()
-    {
-        PlayerPrefs.DeleteKey("jwtToken");
-        PlayerPrefs.Save();
     }
 
     private IEnumerator ValidateTokenCoroutine(string token)
     {
         string jsonData = JsonUtility.ToJson(new TokenPayload { token = token });
-        var request = new UnityWebRequest(validateUrl, "POST");
+
+        UnityWebRequest request = new UnityWebRequest(validateUrl, "POST");
         byte[] bodyRaw = Encoding.UTF8.GetBytes(jsonData);
         request.uploadHandler = new UploadHandlerRaw(bodyRaw);
         request.downloadHandler = new DownloadHandlerBuffer();
@@ -75,56 +88,36 @@ public class AuthTokenManager : MonoBehaviour
 
         if (request.result == UnityWebRequest.Result.Success)
         {
-            Debug.Log("Token valid: " + request.downloadHandler.text);
+            Debug.Log("Token validated: " + request.downloadHandler.text);
         }
         else
         {
-            Debug.LogWarning("Token invalid or expired. Showing login.");
+            Debug.LogWarning("Token invalid or expired. Clearing.");
             DeleteToken();
         }
     }
 
     private string Encrypt(string plainText)
     {
-        byte[] iv = new byte[16];
-        byte[] array;
+        using Aes aes = Aes.Create();
+        aes.Key = Encoding.UTF8.GetBytes(key);
+        aes.IV = new byte[16]; // Static IV (ok for non-sensitive token use)
 
-        using (Aes aes = Aes.Create())
-        {
-            aes.Key = Encoding.UTF8.GetBytes(key);
-            aes.IV = iv;
-            ICryptoTransform encryptor = aes.CreateEncryptor(aes.Key, aes.IV);
-
-            using (MemoryStream encryptStream = new MemoryStream())
-            using (CryptoStream cryptoStream = new CryptoStream(encryptStream, encryptor, CryptoStreamMode.Write))
-            using (StreamWriter writer = new StreamWriter(cryptoStream))
-            {
-                writer.Write(plainText);
-                writer.Close();
-                array = encryptStream.ToArray();
-            }
-        }
-
-        return System.Convert.ToBase64String(array);
+        ICryptoTransform encryptor = aes.CreateEncryptor();
+        byte[] input = Encoding.UTF8.GetBytes(plainText);
+        byte[] encrypted = encryptor.TransformFinalBlock(input, 0, input.Length);
+        return Convert.ToBase64String(encrypted);
     }
 
     private string Decrypt(string cipherText)
     {
-        byte[] iv = new byte[16];
-        byte[] buffer = System.Convert.FromBase64String(cipherText);
+        using Aes aes = Aes.Create();
+        aes.Key = Encoding.UTF8.GetBytes(key);
+        aes.IV = new byte[16];
 
-        using (Aes aes = Aes.Create())
-        {
-            aes.Key = Encoding.UTF8.GetBytes(key);
-            aes.IV = iv;
-            ICryptoTransform decryptor = aes.CreateDecryptor(aes.Key, aes.IV);
-
-            using (MemoryStream decryptStream = new MemoryStream(buffer))
-            using (CryptoStream cryptoStream = new CryptoStream(decryptStream, decryptor, CryptoStreamMode.Read))
-            using (StreamReader reader = new StreamReader(cryptoStream))
-            {
-                return reader.ReadToEnd();
-            }
-        }
+        ICryptoTransform decryptor = aes.CreateDecryptor();
+        byte[] input = Convert.FromBase64String(cipherText);
+        byte[] decrypted = decryptor.TransformFinalBlock(input, 0, input.Length);
+        return Encoding.UTF8.GetString(decrypted);
     }
 }

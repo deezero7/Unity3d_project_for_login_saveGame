@@ -6,4 +6,5 @@ public class LoginResponseFromNodeServer
     public int code;
     public string message;
     public GameAccount userData;
+    public string newToken;
 }
