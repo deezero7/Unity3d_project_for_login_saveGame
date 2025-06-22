@@ -14,9 +14,13 @@ using UnityEngine.SceneManagement;
 
 public class accLogin : MonoBehaviour
 {
-    [SerializeField] private TMP_InputField usernameInput;
-    [SerializeField] private TMP_InputField passwordInput;
+    [SerializeField] private TMP_InputField usernameInputForLogin;
+    [SerializeField] private TMP_InputField passwordInputForLogin;
+    [SerializeField] private TMP_InputField usernameInputForCreateAcc;
+    [SerializeField] private TMP_InputField passwordInputForCreateAcc;
+    [SerializeField] private TMP_InputField emailInputForCreateAcc;
     [SerializeField] private TextMeshProUGUI alert_text;
+    [SerializeField] private TextMeshProUGUI alert_text_forCreateAccPanel;
     [SerializeField] private Button loginButton;
     [SerializeField] private Button createaccButton;
 
@@ -28,6 +32,22 @@ public class accLogin : MonoBehaviour
     [SerializeField] private TextMeshProUGUI xpText;
 
     private AuthTokenManager tokenManager;
+
+
+// Regular expression pattern for validating an email address.
+    private const string EmailRegexPattern = @"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$";
+
+// Method to validate an email address using the defined regex pattern.
+    public bool IsValidEmail(string email)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return false; // Email cannot be empty or just whitespace
+        }
+
+        // Use Regex.IsMatch to check if the email matches the pattern
+        return Regex.IsMatch(email, EmailRegexPattern);
+    }
 
 
     // #region // for local testing only
@@ -121,40 +141,48 @@ public class accLogin : MonoBehaviour
             Debug.Log("Auto-login success: " + request.downloadHandler.text);
             string responseText = request.downloadHandler.text;
 
-            // Extract newToken manually
-            string newToken = null;
-            try
-            {
-                int tokenIndex = responseText.IndexOf("\"newToken\":\"") + 12;
-                int endIndex = responseText.IndexOf("\"", tokenIndex);
-                newToken = responseText.Substring(tokenIndex, endIndex - tokenIndex);
-                Debug.Log("Parsed newToken: " + newToken);
-            }
-            catch
-            {
-                Debug.LogWarning("Failed to extract newToken from response.");
-            }
+            // // Extract newToken manually
+            // string newToken = null;
+            // try
+            // {
+            //     int tokenIndex = responseText.IndexOf("\"newToken\":\"") + 12;
+            //     int endIndex = responseText.IndexOf("\"", tokenIndex);
+            //     newToken = responseText.Substring(tokenIndex, endIndex - tokenIndex);
+            //     Debug.Log("Parsed newToken: " + newToken);
+            // }
+            // catch
+            // {
+            //     Debug.LogWarning("Failed to extract newToken from response.");
+            // }
 
-            LoginResponseFromNodeServer loginResponse = JsonUtility.FromJson<LoginResponseFromNodeServer>(responseText);
+           // Extract the full response safely
+        LoginResponseFromNodeServer loginResponse = JsonUtility.FromJson<LoginResponseFromNodeServer>(responseText);
+
+        if (loginResponse != null && loginResponse.userData != null)
+        {
             loggedInUser = loginResponse.userData.username;
             var userData = loginResponse.userData;
-            string adminText = loginResponse.userData.isAdmin ? " (Admin)" : "";
-            alert_text.text = "Auto-login success " + "Welcome back " + adminText + loginResponse.userData.username + "!";
+            string adminText = userData.isAdmin ? " (Admin)" : "";
+            alert_text.text = "Auto-login success. Welcome back " + adminText + loggedInUser + "!";
 
-            if (!string.IsNullOrEmpty(newToken))
+            // ✅ Save the new token
+            if (!string.IsNullOrEmpty(loginResponse.newToken))
             {
-                tokenManager.SaveEncryptedToken(newToken);
+                Debug.Log("Saving refreshed token");
+                tokenManager.SaveEncryptedToken(loginResponse.newToken);
             }
             else
             {
-                Debug.LogWarning("newToken was null, not saved.");
+                Debug.LogWarning("newToken is missing in response, cannot save.");
             }
 
+            // Update game UI
             goldText.text = userData.gameData.gold.ToString();
             gemsText.text = userData.gameData.gems.ToString();
             levelText.text = userData.gameData.level.ToString();
             xpText.text = userData.gameData.experiencePoints.ToString();
 
+            // Profile picture
             if (!string.IsNullOrEmpty(userData.userProfilePicture))
             {
                 string base64 = userData.userProfilePicture;
@@ -166,6 +194,11 @@ public class accLogin : MonoBehaviour
                 tex.LoadImage(imageBytes);
                 userProfilePicRawImage.texture = tex;
             }
+        }
+        else
+        {
+            Debug.LogWarning("Auto-login succeeded but response was incomplete.");
+        }
         }
         else
         {
@@ -242,8 +275,8 @@ private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
     private IEnumerator Login()
     {
 
-        string username = usernameInput.text;
-        string password = passwordInput.text;
+        string username = usernameInputForLogin.text;
+        string password = passwordInputForLogin.text;
 
         if (username.Length < 3 || username.Length > 25)
         {
@@ -261,7 +294,7 @@ private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
         }
 
 
-        string fullURL = $"{loginEndPoint}?username={UnityWebRequest.EscapeURL(username)}&password={UnityWebRequest.EscapeURL(password)}";
+        // string fullURL = $"{loginEndPoint}?username={UnityWebRequest.EscapeURL(username)}&password={UnityWebRequest.EscapeURL(password)}";
         // Debug: Print the full URL
         // Debug.Log($"Sending request to: {fullURL}");
 
@@ -270,7 +303,7 @@ private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
         form.AddField("password", password);
 
         // Create the request with URL parameters
-        UnityWebRequest request = UnityWebRequest.Post(fullURL, form);
+        UnityWebRequest request = UnityWebRequest.Post(loginEndPoint, form);
 
         // Send the request
         float startTimer = 0.0f;
@@ -346,6 +379,11 @@ private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
                         loginButton.interactable = true;
                         createaccButton.interactable = true;
                         break;
+                    case 4:
+                        alert_text.text = "Please verify your email before logging in.";
+                        loginButton.interactable = true;
+                        createaccButton.interactable = true;
+                        break;
                     case 98:
                         alert_text.text = "Account locked due to too many failed attempts. Try again later";
                         loginButton.interactable = false;
@@ -380,27 +418,36 @@ private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
         }
 
         // Clear the input fields after login attempt
-        usernameInput.text = string.Empty;
-        passwordInput.text = string.Empty;
+        usernameInputForLogin.text = string.Empty;
+        passwordInputForLogin.text = string.Empty;
         yield return null;
     }
 
     private IEnumerator CreateAcc()
     {
 
-        string username = usernameInput.text;
-        string password = passwordInput.text;
+        string username = usernameInputForCreateAcc.text;
+        string password = passwordInputForCreateAcc.text;
+        string email = emailInputForCreateAcc.text;
+
+        if (!IsValidEmail(email))
+        {
+            alert_text_forCreateAccPanel.text = "Invalid email format.";
+            loginButton.interactable = true;
+            createaccButton.interactable = true;
+            yield break;
+        }
 
         if (username.Length < 3 || username.Length > 25)
         {
-            alert_text.text = "Username must be between 5 and 20 characters long.";
+            alert_text_forCreateAccPanel.text = "Username must be between 5 and 20 characters long.";
             loginButton.interactable = true;
             createaccButton.interactable = true;
             yield break;
         }
         if (passwordRegex.IsMatch(password) == false)
         {
-            alert_text.text = "Invalid password format";
+            alert_text_forCreateAccPanel.text = "Invalid password format";
             loginButton.interactable = true;
             createaccButton.interactable = true;
             yield break;
@@ -414,6 +461,7 @@ private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
         WWWForm form = new WWWForm();
         form.AddField("username", username);
         form.AddField("password", password);
+        form.AddField("email", email);
 
         // Create the request with URL parameters
         UnityWebRequest request = UnityWebRequest.Post(fullURL, form);
@@ -446,10 +494,10 @@ private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
             if (createResponse.code == 0)
             {
                 GameAccount createUserData = new GameAccount();
-                createUserData.gameData.gold = 7;
-                createUserData.gameData.gems = 7;
-                createUserData.gameData.level = 7;
-                createUserData.gameData.experiencePoints = 7;
+                createUserData.gameData.gold = 0;
+                createUserData.gameData.gems = 0;
+                createUserData.gameData.level = 0;
+                createUserData.gameData.experiencePoints = 0;
                 // upload this manual filled data to the server for test purposes
                 createResponse.userData = createUserData;
                 // loginButton.interactable = true;
@@ -463,27 +511,27 @@ private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
                 switch (createResponse.code)
                 {
                     case 1:
-                        alert_text.text = "username and password are required";
+                        alert_text_forCreateAccPanel.text = "All fields are required";
                         loginButton.interactable = true;
                         createaccButton.interactable = true;
                         break;
                     case 2:
-                        alert_text.text = "Username already exists, please choose another one";
+                        alert_text_forCreateAccPanel.text = "Username already exists, please choose another one";
                         loginButton.interactable = true;
                         createaccButton.interactable = true;
                         break;
                     case 3:
-                        alert_text.text = "Password is too weak, please choose a stronger one";
+                        alert_text_forCreateAccPanel.text = "Password is too weak, please choose a stronger one";
                         loginButton.interactable = true;
                         createaccButton.interactable = true;
                         break;
                     case 99:
-                        alert_text.text = "Too many login attempts. Please try again later";
+                        alert_text_forCreateAccPanel.text = "Too many login attempts. Please try again later";
                         loginButton.interactable = false;
                         createaccButton.interactable = false;
                         break;
                     default:
-                        alert_text.text = "Unknown error occurred or Corrupted data";
+                        alert_text_forCreateAccPanel.text = "Unknown error occurred or Corrupted data";
                         loginButton.interactable = false;
                         createaccButton.interactable = false;
                         break;
@@ -495,12 +543,13 @@ private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
         {
             loginButton.interactable = true;
             createaccButton.interactable = true;
-            alert_text.text = "Error connection to server.";
+            alert_text_forCreateAccPanel.text = "Error connection to server.";
         }
 
         // Clear the input fields after login attempt
-        usernameInput.text = string.Empty;
-        passwordInput.text = string.Empty;
+        usernameInputForCreateAcc.text = string.Empty;
+        passwordInputForCreateAcc.text = string.Empty;
+        emailInputForCreateAcc.text = string.Empty;
         yield return null;
     }
 

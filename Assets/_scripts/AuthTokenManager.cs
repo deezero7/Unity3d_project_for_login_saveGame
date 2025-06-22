@@ -10,7 +10,7 @@ public class AuthTokenManager : MonoBehaviour
 {
     private const string key = "mine16CharKey123"; // 16-char AES key
     private const string prefsKey = "authToken";   // PlayerPrefs key
-    private const string validateUrl = "https://nodejs-server-for-unity3dgame-login-5vxc.onrender.com/u3d/validateToken";
+    private const string validateUrl = "https://nodejs-server-for-unity3dgame-login-5vxc.onrender.com/u3d//validate-token";
 
     [System.Serializable]
     private class TokenPayload
