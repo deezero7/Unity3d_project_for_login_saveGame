@@ -28,7 +28,7 @@ public class AuthTokenManager : MonoBehaviour
 
     void Start()
     {
-        ValidateSavedToken(); // Optional auto-validation on start
+        //ValidateSavedToken(); // Optional auto-validation on start
     }
 
     // Save token to PlayerPrefs (encrypted)
