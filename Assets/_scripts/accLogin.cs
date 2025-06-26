@@ -14,6 +14,8 @@ using UnityEngine.SceneManagement;
 
 public class accLogin : MonoBehaviour
 {
+    public NotificationPanelManager notificationManager;
+
     [SerializeField] private TMP_InputField usernameInputForLogin;
     [SerializeField] private TMP_InputField passwordInputForLogin;
     [SerializeField] private TMP_InputField usernameInputForCreateAcc;
@@ -33,9 +35,19 @@ public class accLogin : MonoBehaviour
 
     private AuthTokenManager tokenManager;
 
+    [SerializeField] private TextMeshProUGUI playerNameText; // Text to display the player's name
 
 // Regular expression pattern for validating an email address.
     private const string EmailRegexPattern = @"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$";
+
+    // Call this method whenever a new message should pop up
+    public void OnNewMessageReceived(string messageContent)
+    {
+        if (notificationManager != null)
+        {
+            notificationManager.ShowNotification(messageContent);
+        }
+    }
 
 // Method to validate an email address using the defined regex pattern.
     public bool IsValidEmail(string email)
@@ -85,6 +97,8 @@ public class accLogin : MonoBehaviour
     public void OnLoginClick()
     {
         alert_text.text = "Signing in";
+        OnNewMessageReceived("Signing in...");
+
         loginButton.interactable = false;
 
         StartCoroutine(Login());
@@ -92,6 +106,8 @@ public class accLogin : MonoBehaviour
     public void OnCreateAccClick()
     {
         alert_text.text = "Creating account ";
+        OnNewMessageReceived("Creating account");
+
         createaccButton.interactable = false;
 
         StartCoroutine(CreateAcc());
@@ -138,6 +154,7 @@ public class accLogin : MonoBehaviour
 
         if (request.result == UnityWebRequest.Result.Success)
         {
+
             Debug.Log("Auto-login success: " + request.downloadHandler.text);
             string responseText = request.downloadHandler.text;
 
@@ -164,17 +181,22 @@ public class accLogin : MonoBehaviour
             var userData = loginResponse.userData;
             string adminText = userData.isAdmin ? " (Admin)" : "";
             alert_text.text = "Auto-login success. Welcome back " + adminText + loggedInUser + "!";
+            string name = "Auto-login success. Welcome back " + adminText + loggedInUser + "!";
+            OnNewMessageReceived(name);
+            playerNameText.text = loggedInUser; // Update player name text
+            
+            
 
             // ✅ Save the new token
-            if (!string.IsNullOrEmpty(loginResponse.newToken))
-            {
-                Debug.Log("Saving refreshed token");
-                tokenManager.SaveEncryptedToken(loginResponse.newToken);
-            }
-            else
-            {
-                Debug.LogWarning("newToken is missing in response, cannot save.");
-            }
+                if (!string.IsNullOrEmpty(loginResponse.newToken))
+                {
+                    Debug.Log("Saving refreshed token");
+                    tokenManager.SaveEncryptedToken(loginResponse.newToken);
+                }
+                else
+                {
+                    Debug.LogWarning("newToken is missing in response, cannot save.");
+                }
 
             // Update game UI
             goldText.text = userData.gameData.gold.ToString();
@@ -209,6 +231,7 @@ public class accLogin : MonoBehaviour
     public void OnUserProfilePicUploadClick()
     {
         alert_text.text = "Selecting profile picture...";
+        OnNewMessageReceived("Selecting profile picture...");
 
         // Define allowed file types
         string[] allowedFileTypes = new string[] { "image/*" };
@@ -218,6 +241,7 @@ public class accLogin : MonoBehaviour
             if (path == null)
             {
                 alert_text.text = "File selection canceled.";
+                OnNewMessageReceived("File selection canceled.");
                 return;
             }
 
@@ -226,6 +250,7 @@ public class accLogin : MonoBehaviour
             if (imageData.Length > 200 * 1024)
             {
                 alert_text.text = "Image too large. Must be under 200KB.";
+                OnNewMessageReceived("Image too large. Must be under 200KB.");
                 return;
             }
 
@@ -242,6 +267,7 @@ private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
     if (string.IsNullOrEmpty(token))
     {
         alert_text.text = "No token found. Please log in again.";
+        OnNewMessageReceived("No token found. Please log in again.");
         yield break;
     }
 
@@ -255,18 +281,20 @@ private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
     Debug.Log("Uploading profile picture with token...");
     yield return request.SendWebRequest();
 
-    if (request.result == UnityWebRequest.Result.Success || request.responseCode == 200)
-    {
-        Texture2D tex = new Texture2D(2, 2);
-        tex.LoadImage(imageBytes);
-        userProfilePicRawImage.texture = tex;
-        alert_text.text = "Profile picture uploaded successfully.";
+        if (request.result == UnityWebRequest.Result.Success || request.responseCode == 200)
+        {
+            Texture2D tex = new Texture2D(2, 2);
+            tex.LoadImage(imageBytes);
+            userProfilePicRawImage.texture = tex;
+            alert_text.text = "Profile picture uploaded successfully.";
+            OnNewMessageReceived("Profile picture uploaded successfully.");
     }
-    else
-    {
-        alert_text.text = $"Failed to upload image: {request.error}";
-        Debug.LogError("Upload failed: " + request.downloadHandler.text);
-    }
+        else
+        {
+            alert_text.text = $"Failed to upload image: {request.error}";
+            OnNewMessageReceived($"Failed to upload image: {request.error}");
+            Debug.LogError("Upload failed: " + request.downloadHandler.text);
+        }
 
     createaccButton.interactable = true;
 }
@@ -281,6 +309,7 @@ private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
         if (username.Length < 3 || username.Length > 25)
         {
             alert_text.text = "Username must be between 5 and 20 characters long.";
+            OnNewMessageReceived("Username must be between 5 and 20 characters long.");
             loginButton.interactable = true;
             createaccButton.interactable = true;
             yield break;
@@ -288,22 +317,26 @@ private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
         if (passwordRegex.IsMatch(password) == false)
         {
             alert_text.text = "Invalid password.";
+            OnNewMessageReceived("Invalid password. Password must be between 6 and 25 characters long, contain at least one uppercase letter, one lowercase letter, one digit, and one special character.");
             loginButton.interactable = true;
             createaccButton.interactable = true;
             yield break;
         }
 
-
+        // // Create the full URL with parameters for debugging ONLY
+        // // Note: In production, you have to use POST with a form body instead of URL
         // string fullURL = $"{loginEndPoint}?username={UnityWebRequest.EscapeURL(username)}&password={UnityWebRequest.EscapeURL(password)}";
-        // Debug: Print the full URL
+        // // Debug: Print the full URL
         // Debug.Log($"Sending request to: {fullURL}");
+
+        string fullURL = loginEndPoint; // Use the endpoint directly for POST request
 
         WWWForm form = new WWWForm();
         form.AddField("username", username);
         form.AddField("password", password);
 
         // Create the request with URL parameters
-        UnityWebRequest request = UnityWebRequest.Post(loginEndPoint, form);
+        UnityWebRequest request = UnityWebRequest.Post(fullURL, form);
 
         // Send the request
         float startTimer = 0.0f;
@@ -327,6 +360,7 @@ private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
         // Handle response
         if (request.result == UnityWebRequest.Result.Success)
         {
+            playerNameText.text = username; // Update player name text
             Debug.Log(request.downloadHandler.text);
             loginResponse = JsonUtility.FromJson<LoginResponseFromNodeServer>(request.downloadHandler.text);
 
@@ -359,10 +393,12 @@ private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
                 }
 
                 //alert_text.text = "username and password are required";
+
                 loginButton.interactable = false;
                 createaccButton.interactable = false;
                 string adminText = loginResponse.userData.isAdmin ? " (Admin)" : "";
                 alert_text.text = "Welcome back " + adminText + loginResponse.userData.username + "!";
+                OnNewMessageReceived("Welcome back " + adminText + loginResponse.userData.username + "!");
 
             }
             else
@@ -371,31 +407,37 @@ private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
                 {
                     case 1:
                         alert_text.text = "Invalid Credentials";
+                        OnNewMessageReceived("Invalid Credentials");
                         loginButton.interactable = true;
                         createaccButton.interactable = true;
                         break;
                     case 3:
                         alert_text.text = "Password is too weak, please choose a stronger one";
+                        OnNewMessageReceived("Password is too weak, please choose a stronger one");
                         loginButton.interactable = true;
                         createaccButton.interactable = true;
                         break;
                     case 4:
                         alert_text.text = "Please verify your email before logging in.";
+                        OnNewMessageReceived("Please verify your email before logging in.");
                         loginButton.interactable = true;
                         createaccButton.interactable = true;
                         break;
                     case 98:
                         alert_text.text = "Account locked due to too many failed attempts. Try again later";
+                        OnNewMessageReceived("Account locked due to too many failed attempts. Try again later");
                         loginButton.interactable = false;
                         createaccButton.interactable = false;
                         break;
                     case 99:
                         alert_text.text = "Too many login attempts. Please try again later";
+                        OnNewMessageReceived("Too many login attempts. Please try again later");
                         loginButton.interactable = false;
                         createaccButton.interactable = false;
                         break;
                     default:
                         alert_text.text = "Unknown error occurred or Corrupted data";
+                        OnNewMessageReceived("Unknown error occurred or Corrupted data");
                         loginButton.interactable = false;
                         createaccButton.interactable = false;
                         break;
@@ -411,6 +453,7 @@ private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
         else
         {
             alert_text.text = "Error connection to server.";
+            OnNewMessageReceived("Error connection to server.");
             Debug.LogError($"Request failed! Error: {request.error}");
             loginButton.interactable = true;
             createaccButton.interactable = true;
@@ -433,6 +476,7 @@ private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
         if (!IsValidEmail(email))
         {
             alert_text_forCreateAccPanel.text = "Invalid email format.";
+            OnNewMessageReceived("Invalid email format.");
             loginButton.interactable = true;
             createaccButton.interactable = true;
             yield break;
@@ -441,6 +485,7 @@ private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
         if (username.Length < 3 || username.Length > 25)
         {
             alert_text_forCreateAccPanel.text = "Username must be between 5 and 20 characters long.";
+            OnNewMessageReceived("Username must be between 5 and 20 characters long.");
             loginButton.interactable = true;
             createaccButton.interactable = true;
             yield break;
@@ -448,15 +493,19 @@ private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
         if (passwordRegex.IsMatch(password) == false)
         {
             alert_text_forCreateAccPanel.text = "Invalid password format";
+            OnNewMessageReceived("Invalid password. Password must be between 6 and 25 characters long, contain at least one uppercase letter, one lowercase letter, one digit, and one special character.");
             loginButton.interactable = true;
             createaccButton.interactable = true;
             yield break;
         }
 
+        // // Create the full URL with parameters for debugging ONLY
+        // // Note: In production, you have to use POST with a form body instead of URL
+        // string fullURL = $"{createaccEndPoint}?username={UnityWebRequest.EscapeURL(username)}&password={UnityWebRequest.EscapeURL(password)}";
+        // // Debug: Print the full URL
+        // Debug.Log($"Sending request to: {fullURL}");
 
-        string fullURL = $"{createaccEndPoint}?username={UnityWebRequest.EscapeURL(username)}&password={UnityWebRequest.EscapeURL(password)}";
-        // Debug: Print the full URL
-        Debug.Log($"Sending request to: {fullURL}");
+        string fullURL = createaccEndPoint;
 
         WWWForm form = new WWWForm();
         form.AddField("username", username);
@@ -488,7 +537,7 @@ private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
         {
 
             Debug.Log(request.downloadHandler.text);
-            CreateResponseFromNodeServer createResponse = JsonUtility.FromJson<CreateResponseFromNodeServer>(request.downloadHandler.text);
+            CreateAccResponseFromNodeServer createResponse = JsonUtility.FromJson<CreateAccResponseFromNodeServer>(request.downloadHandler.text);
 
             // response from nodejs server compare to do the following..
             if (createResponse.code == 0)
@@ -504,6 +553,7 @@ private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
                 // createaccButton.interactable = true;
                 // GameAccount returnedAccount = JsonUtility.FromJson<GameAccount>(request.downloadHandler.text);
                 alert_text.text = "Account created! Logg in...";
+                OnNewMessageReceived("Account created! Log in...");
 
             }
             else
@@ -512,26 +562,34 @@ private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
                 {
                     case 1:
                         alert_text_forCreateAccPanel.text = "All fields are required";
+                        OnNewMessageReceived("All fields are required");
+
                         loginButton.interactable = true;
                         createaccButton.interactable = true;
                         break;
                     case 2:
                         alert_text_forCreateAccPanel.text = "Username already exists, please choose another one";
+                        OnNewMessageReceived("Username already exists, please choose another one");
+
                         loginButton.interactable = true;
                         createaccButton.interactable = true;
                         break;
                     case 3:
                         alert_text_forCreateAccPanel.text = "Password is too weak, please choose a stronger one";
+                        OnNewMessageReceived("Password is too weak, please choose a stronger one");
+
                         loginButton.interactable = true;
                         createaccButton.interactable = true;
                         break;
                     case 99:
                         alert_text_forCreateAccPanel.text = "Too many login attempts. Please try again later";
+                        OnNewMessageReceived("Too many login attempts. Please try again later");
                         loginButton.interactable = false;
                         createaccButton.interactable = false;
                         break;
                     default:
                         alert_text_forCreateAccPanel.text = "Unknown error occurred or Corrupted data";
+                        OnNewMessageReceived("Unknown error occurred or Corrupted data");
                         loginButton.interactable = false;
                         createaccButton.interactable = false;
                         break;
@@ -544,6 +602,7 @@ private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
             loginButton.interactable = true;
             createaccButton.interactable = true;
             alert_text_forCreateAccPanel.text = "Error connection to server.";
+            OnNewMessageReceived("Error connection to server.");
         }
 
         // Clear the input fields after login attempt

@@ -1,7 +1,7 @@
 using UnityEngine;
 
 [System.Serializable]
-public class CreateResponseFromNodeServer
+public class CreateAccResponseFromNodeServer
 {
     public int code;
     public string message;
