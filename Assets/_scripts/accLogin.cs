@@ -37,10 +37,10 @@ public class accLogin : MonoBehaviour
 
     [SerializeField] private TextMeshProUGUI playerNameText; // Text to display the player's name
 
-// Regular expression pattern for validating an email address.
+    // Regular expression pattern for validating an email address.
     private const string EmailRegexPattern = @"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$";
 
-    // Call this method whenever a new message should pop up
+    // Call this method whenever a new message should pop up as pop up notification.
     public void OnNewMessageReceived(string messageContent)
     {
         if (notificationManager != null)
@@ -49,7 +49,7 @@ public class accLogin : MonoBehaviour
         }
     }
 
-// Method to validate an email address using the defined regex pattern.
+    // Method to validate an email address using the defined regex pattern.
     public bool IsValidEmail(string email)
     {
         if (string.IsNullOrWhiteSpace(email))
@@ -172,22 +172,22 @@ public class accLogin : MonoBehaviour
             //     Debug.LogWarning("Failed to extract newToken from response.");
             // }
 
-           // Extract the full response safely
-        LoginResponseFromNodeServer loginResponse = JsonUtility.FromJson<LoginResponseFromNodeServer>(responseText);
+            // Extract the full response safely
+            LoginResponseFromNodeServer loginResponse = JsonUtility.FromJson<LoginResponseFromNodeServer>(responseText);
 
-        if (loginResponse != null && loginResponse.userData != null)
-        {
-            loggedInUser = loginResponse.userData.username;
-            var userData = loginResponse.userData;
-            string adminText = userData.isAdmin ? " (Admin)" : "";
-            alert_text.text = "Auto-login success. Welcome back " + adminText + loggedInUser + "!";
-            string name = "Auto-login success. Welcome back " + adminText + loggedInUser + "!";
-            OnNewMessageReceived(name);
-            playerNameText.text = loggedInUser; // Update player name text
-            
-            
+            if (loginResponse != null && loginResponse.userData != null)
+            {
+                loggedInUser = loginResponse.userData.username;
+                var userData = loginResponse.userData;
+                string adminText = userData.isAdmin ? " (Admin)" : "";
+                alert_text.text = "Auto-login success. Welcome back " + adminText + loggedInUser + "!";
+                string name = "Auto-login success. Welcome back " + adminText + loggedInUser + "!";
+                OnNewMessageReceived(name);
+                playerNameText.text = loggedInUser; // Update player name text
 
-            // ✅ Save the new token
+
+
+                // ✅ Save the new token
                 if (!string.IsNullOrEmpty(loginResponse.newToken))
                 {
                     Debug.Log("Saving refreshed token");
@@ -198,29 +198,29 @@ public class accLogin : MonoBehaviour
                     Debug.LogWarning("newToken is missing in response, cannot save.");
                 }
 
-            // Update game UI
-            goldText.text = userData.gameData.gold.ToString();
-            gemsText.text = userData.gameData.gems.ToString();
-            levelText.text = userData.gameData.level.ToString();
-            xpText.text = userData.gameData.experiencePoints.ToString();
+                // Update game UI
+                goldText.text = userData.gameData.gold.ToString();
+                gemsText.text = userData.gameData.gems.ToString();
+                levelText.text = userData.gameData.level.ToString();
+                xpText.text = userData.gameData.experiencePoints.ToString();
 
-            // Profile picture
-            if (!string.IsNullOrEmpty(userData.userProfilePicture))
-            {
-                string base64 = userData.userProfilePicture;
-                if (base64.StartsWith("data:image"))
-                    base64 = base64.Substring(base64.IndexOf(",") + 1);
+                // Profile picture
+                if (!string.IsNullOrEmpty(userData.userProfilePicture))
+                {
+                    string base64 = userData.userProfilePicture;
+                    if (base64.StartsWith("data:image"))
+                        base64 = base64.Substring(base64.IndexOf(",") + 1);
 
-                byte[] imageBytes = Convert.FromBase64String(base64);
-                Texture2D tex = new Texture2D(2, 2);
-                tex.LoadImage(imageBytes);
-                userProfilePicRawImage.texture = tex;
+                    byte[] imageBytes = Convert.FromBase64String(base64);
+                    Texture2D tex = new Texture2D(2, 2);
+                    tex.LoadImage(imageBytes);
+                    userProfilePicRawImage.texture = tex;
+                }
             }
-        }
-        else
-        {
-            Debug.LogWarning("Auto-login succeeded but response was incomplete.");
-        }
+            else
+            {
+                Debug.LogWarning("Auto-login succeeded but response was incomplete.");
+            }
         }
         else
         {
@@ -259,27 +259,27 @@ public class accLogin : MonoBehaviour
         }, allowedFileTypes);
     }
 
-private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
-{
-    string token = tokenManager.LoadDecryptedToken();
-
-
-    if (string.IsNullOrEmpty(token))
+    private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
     {
-        alert_text.text = "No token found. Please log in again.";
-        OnNewMessageReceived("No token found. Please log in again.");
-        yield break;
-    }
+        string token = tokenManager.LoadDecryptedToken();
 
-    // Use WWWForm so Unity properly sets multipart boundary
-    WWWForm form = new WWWForm();
-    form.AddBinaryData("image", imageBytes, "profile.png", "image/png");
 
-    UnityWebRequest request = UnityWebRequest.Post(userProfilePicEndPoint, form);
-    request.SetRequestHeader("Authorization", "Bearer " + token);  // ✅ send token in header
+        if (string.IsNullOrEmpty(token))
+        {
+            alert_text.text = "No token found. Please log in again.";
+            OnNewMessageReceived("No token found. Please log in again.");
+            yield break;
+        }
 
-    Debug.Log("Uploading profile picture with token...");
-    yield return request.SendWebRequest();
+        // Use WWWForm so Unity properly sets multipart boundary
+        WWWForm form = new WWWForm();
+        form.AddBinaryData("image", imageBytes, "profile.png", "image/png");
+
+        UnityWebRequest request = UnityWebRequest.Post(userProfilePicEndPoint, form);
+        request.SetRequestHeader("Authorization", "Bearer " + token);  // ✅ send token in header
+
+        Debug.Log("Uploading profile picture with token...");
+        yield return request.SendWebRequest();
 
         if (request.result == UnityWebRequest.Result.Success || request.responseCode == 200)
         {
@@ -288,7 +288,7 @@ private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
             userProfilePicRawImage.texture = tex;
             alert_text.text = "Profile picture uploaded successfully.";
             OnNewMessageReceived("Profile picture uploaded successfully.");
-    }
+        }
         else
         {
             alert_text.text = $"Failed to upload image: {request.error}";
@@ -296,8 +296,8 @@ private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
             Debug.LogError("Upload failed: " + request.downloadHandler.text);
         }
 
-    createaccButton.interactable = true;
-}
+        createaccButton.interactable = true;
+    }
 
 
     private IEnumerator Login()
@@ -636,7 +636,7 @@ private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
     public TMP_InputField gemsInputField;
     private const string SaveGameDataUrl = "https://nodejs-server-for-unity3dgame-login-5vxc.onrender.com/u3d/saveGameData"; // Replace with your real endpoint
 
-
+    // take input from the user for saving it to the server
     public void OnSaveButtonClick()
     {
         // Check if the user is logged in
@@ -679,6 +679,7 @@ private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
         }
     }
 
+    // This method format the game data for the server in json 
     private void SaveGameDataToServer(string username, GameData data)
     {
         GameAccount request = new GameAccount
@@ -690,7 +691,7 @@ private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
         string json = JsonUtility.ToJson(request);
         StartCoroutine(SendPutRequest(json, data));
     }
-
+    // This method sends the game data to the server using a PUT request
     private IEnumerator SendPutRequest(string json, GameData data)
     {
         UnityWebRequest request = new UnityWebRequest(SaveGameDataUrl, "PUT");
@@ -719,6 +720,51 @@ private IEnumerator UploadProfilePicture(string username, byte[] imageBytes)
         }
     }
 
+    #endregion
+
+    #region // Forgot Password
+    public TMP_InputField emailInputForForgotPassword;
+
+    public void OnForgotPasswordClick()
+    {
+        string email = emailInputForForgotPassword.text.Trim();
+
+        if (!IsValidEmail(email))
+        {
+            alert_text.text = "Invalid email format.";
+            OnNewMessageReceived("Invalid email format.");
+            return;
+        }
+
+        StartCoroutine(SendForgotPasswordRequest(email));
+    }
+    private IEnumerator SendForgotPasswordRequest(string email)
+    {
+        //endpoint for forgot password
+        string forgotPasswordUrl = "https://nodejs-server-for-unity3dgame-login-5vxc.onrender.com/u3d/forgotPassword"; 
+
+        WWWForm form = new WWWForm();
+        form.AddField("email", email);
+
+        UnityWebRequest request = UnityWebRequest.Post(forgotPasswordUrl, form);
+        yield return request.SendWebRequest();
+
+        if (request.result == UnityWebRequest.Result.Success)
+        {
+            ResponseFromServer response = JsonUtility.FromJson<ResponseFromServer>(request.downloadHandler.text);
+            Debug.Log("Forgot password request sent successfully.");
+            // alert_text.text = "If the email exists, a reset link has been sent.";
+            // alert_text.text = response.message; // Use the message from the server response
+            OnNewMessageReceived(response.message);
+        }
+        else
+        {
+            ResponseFromServer response = JsonUtility.FromJson<ResponseFromServer>(request.downloadHandler.text);
+            Debug.Log(response.message + " : Error sending forgot password request: " + request.error);
+            // alert_text.text = "Error sending forgot password request.";
+            OnNewMessageReceived(response.message); // Use the message from the server response
+        }
+    }
     #endregion
 
 }
